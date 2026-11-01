@@ -1,0 +1,27 @@
+# Credentials and local environment settings.
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+.vscode/
+.idea/
+
+# Python caches and local tooling.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local selection history, generated artifacts, and archived material.
+/repository_kickoff/data/*
+!/repository_kickoff/data/used_repositories.example.json
+/repository_kickoff/outputs/
+/repository_kickoff/selected_repositories/
+/repository_kickoff/legacy_long_horizon/
+*.zip
+.DS_Store
+Thumbs.db
