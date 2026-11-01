@@ -1,150 +1,165 @@
 # Repository Kickoff
 
-Find a public Python repository and generate a source-grounded, read-only
-engineering investigation. Repository Kickoff combines deterministic GitHub
-checks, bounded archive inspection, local content screening, and two independent
-model stages in a repeatable command-line workflow:
+**Find a Python repository. Generate an engineering investigation grounded in its source.**
 
-1. A deterministic GitHub search and pinned-archive preflight streams candidate
-   downloads, enforces the under-50-MiB limit, extracts them safely, applies a
-   structural floor for a meaningful tracked tree, Python source and tests,
-   packaging metadata, and CI, and records content-safety findings as advisory
-   metadata. Potential PII, credentials, keys, and other content findings do not
-   exclude a public GitHub repository during discovery; the model must establish
-   connected architectural depth from source evidence.
-2. `prompts/repository_finder.md` directs a web-enabled scout to compare only
-   the current, pinned repositories on that preflight allowlist.
-3. A deterministic GitHub check verifies the full shortlist, including the
-   immutable repository identity and current default-branch commit. If a branch
-   advances during research, the immutable finder-evidence commit is preserved
-   separately from the newly verified download commit.
-4. The selected commit archive is streamed to a temporary directory. The
-   complete downloaded byte count must be strictly less than 50 MiB
-   (52,428,800 bytes); GitHub repository-size metadata is not used.
-5. Safe ZIP extraction rejects traversal, links, path collisions, excessive
-   expansion, suspicious compression ratios, and excessive file counts.
-6. After selection, a local content-safety scanner checks the extracted tree
-   and writes a linked risk-file report. Findings are advisory for selection
-   and prompt creation, but not permission to upload the source.
-7. A repository clean on the initial scan is copied to an isolated prepared
-   tree and rescanned before an upload-ready archive is created. A repository
-   with findings instead awaits manual review; no upload-ready archive is made.
-8. `prompts/turn_one_prompt_writer.md` creates one read-only engineering
-   investigation in either case. The result links the risk report.
+Repository Kickoff is a command-line tool that discovers public GitHub projects,
+verifies a specific commit, inspects the source archive, and produces a read-only
+engineering brief. It combines deterministic checks with separate repository-finder
+and task-writer model stages.
 
-The two model stages do not share a chat. The writer receives a deliberately
-reduced engineering dossier. Content-review status, scan findings, screening
-limitations, and prepared-repository identity stay in the local risk report and
-run records. Scan-related notes are filtered from the writer's risk notes;
-engineering risks remain available. Candidate comparisons, selection scoring,
-opening-variation data, long-horizon fit, run identifiers, and model settings
-also remain orchestration metadata and are not sent to the task writer.
-GitHub verification replaces
-model-reported identity, activity, stars, license, branch, and commit with
-current values. Finder evidence remains pinned to the immutable commit it
-actually inspected, while the writer and final task must cite the current
-verified/downloaded commit. Repository code is downloaded for local inspection,
-but is never installed or executed.
+Each completed run provides:
 
-The writer returns structured task fields rather than free-form Markdown. The
-application renders them as `Goal`, `Context`, `Scope`, `Expected Outcome`, and
-`Guardrails`. The task asks only for findings within the current investigation;
-it does not request a subsequent implementation, roadmap, follow-up turn, or
-explanation of the evaluation setup. Repository sourcing, manual content-risk
-review, sanitization, and upload-readiness statements are excluded from all
-task fields; the separate risk report retains that information.
+- A repository recommendation with a pinned commit and source citations.
+- An engineering task organized into **Goal**, **Context**, **Scope**, **Expected Outcome**, and **Guardrails**.
+- A content-review report with links to flagged files and lines.
+- A prepared source archive when both the initial scan and the prepared-copy rescan are clean.
 
-The repository rule is **more than 500 stars**, with no upper bound. The selected
-repository must also pass a structured long-horizon-fit gate: at least three
-connected workflow boundaries, multiple maintainer dimensions, useful tests or
-fixtures, local feasibility, meaningful failure/recovery behavior, and no
-unresolved disqualifiers.
+Downloaded repository code is inspected locally; it is never installed or executed.
 
-## Risk report and upload boundary
+[Quick start](#quick-start) · [Configuration](#configuration) · [Outputs](#outputs) · [How it works](#how-it-works) · [Troubleshooting](#troubleshooting) · [Development](#development)
 
-The scanner never includes matched secret or PII values in its JSON reports.
-It records only categories, locations, detector names, counts, and one-way
-fingerprints.
+## Requirements
 
-Candidate discovery and engineering-task creation do not treat scanner findings as
-eligibility failures for public GitHub repositories. The report gives a risk
-factor and pinned links to every flagged file and line. A selected repository
-with findings yields the repository recommendation, engineering task, and report,
-but no upload-ready archive. Manual review remains necessary before using or
-uploading that codebase.
+- **Python:** tested with Python 3.12.
+- **Git:** available on your system's `PATH`.
+- **OpenAI API access:** an API key and access to models supporting the application's web-search, reasoning, and structured-output settings.
+- **Network access:** GitHub, source-archive downloads, and the OpenAI API.
 
-- Real keys, tokens, private keys, proprietary indicators, sensitive config,
-  unreadable content, raster images/screenshots, binaries, and ambiguous exports are
-  rejected or require manual review. They are never automatically rewritten.
-- Plain UTF-8 SVG XML is text-scanned; SVG files with embedded raster data
-  require manual review.
-- The kickoff command does not automatically rewrite flagged files. After
-  manual review, remediation and upload preparation still require a clean scan;
-  changing the registry flag does not certify source safety.
-- The source tree and original archive are never modified. The original archive
-  exists only in a temporary directory and is deleted when preparation ends.
-- A clean selected tree produces a `clean`/`clean_upstream` prepared archive.
-  A flagged tree has no prepared archive or prepared identity in the kickoff.
+The commands below use **Windows PowerShell** and run from the cloned repository root.
 
-This is conservative heuristic screening, not a proof that sensitive content is
-absent. Opaque content requires review rather than being silently accepted.
+## Quick start
 
-## Setup
-
-Tested with Python 3.12. From the cloned repository root:
+### 1. Clone the repository and install dependencies
 
 ```powershell
+git clone https://github.com/atulnayyar19/repository_kickoff.git
+cd repository_kickoff
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r .\repository_kickoff\requirements.txt
-Copy-Item .\repository_kickoff\data\used_repositories.example.json .\repository_kickoff\data\used_repositories.json
 ```
 
-The registry starts empty. Its runtime copy is ignored by Git so personal
-selection history stays local. Run the copy command once during setup; preserve
-an existing registry when updating the application.
+The commands invoke the virtual environment directly, so activation is optional.
 
-The script reads `OPENAI_API_KEY` from the process environment or
-`repository_kickoff/.env`. You can copy the local example if needed:
+### 2. Initialize your local configuration and registry
+
+Run these copy commands once on a fresh checkout. Keep existing files when updating
+an installation; the registry preserves your selection history.
 
 ```powershell
 Copy-Item .\repository_kickoff\.env.example .\repository_kickoff\.env
+Copy-Item .\repository_kickoff\data\used_repositories.example.json .\repository_kickoff\data\used_repositories.json
 ```
 
-An optional `GITHUB_TOKEN` increases the GitHub API rate limit. Never place keys
-in prompts or output files.
+Edit `repository_kickoff/.env` and add your credentials:
 
-## Validate locally without spending API tokens
+```dotenv
+OPENAI_API_KEY=your_openai_api_key
+GITHUB_TOKEN=
+```
+
+| Variable | Purpose |
+| --- | --- |
+| `OPENAI_API_KEY` | Required for generation. |
+| `GITHUB_TOKEN` | Optional. Increases the GitHub API rate limit. |
+
+You can also set these variables in the process environment. Existing environment
+values take precedence over `.env`. Credentials and the runtime registry are ignored
+by Git; keep credentials out of prompts and generated files.
+
+### 3. Validate the local setup
 
 ```powershell
 .\.venv\Scripts\python.exe .\repository_kickoff\repository_kickoff.py --validate-only
 ```
 
-## Run the local tests
+A successful check prints JSON containing `"valid": true`. It checks prompts, the
+registry, and output schemas without API calls. It does not verify credentials,
+network access, or model availability.
 
-```powershell
-.\.venv\Scripts\python.exe -m unittest discover -s repository_kickoff -t . -p "test_*.py"
-```
-
-The tests use temporary directories and mocked external calls; no paid API
-requests are needed.
-
-## Generate a repository and engineering task
+### 4. Generate a repository kickoff
 
 ```powershell
 .\.venv\Scripts\python.exe .\repository_kickoff\repository_kickoff.py
 ```
 
-Each completed selection also creates a consolidated handoff at
-`repository_kickoff/selected_repositories/<owner>/<repository>/repository_kickoff.md`.
-It includes the repository link and pinned commit, risk factor and linked
-file/line findings when present, and the task-facing engineering request.
-Selection rationale, model settings, and token usage remain in detailed JSON
-stage receipts under `outputs/<run-id>/`; they are not included in the
-consolidated handoff. Use `--repository-dir` to choose a different handoff root.
-Existing handoffs are never overwritten with different content.
+Generation makes paid API calls. A normal successful run invokes two model stages;
+[reusing a finder response](#reuse-a-saved-finder-response) avoids another finder call.
 
-Each successful run creates the finder, verification, scan, writer, Markdown,
-and status files below. Prepared-tree files are created only for clean scans:
+The console prints the result and handoff paths. Start with the consolidated brief:
+
+```text
+repository_kickoff/selected_repositories/<owner>/<repository>/repository_kickoff.md
+```
+
+It contains the repository link, pinned commit, content-review findings, and engineering
+task. Selection rationale, model settings, and token usage remain in the separate run
+records. Existing handoffs are never overwritten with different content.
+
+## Configuration
+
+### Command-line options
+
+| Option | Default | Purpose |
+| --- | --- | --- |
+| `--finder-model` | `gpt-5.6-sol` | Model used to compare repository candidates. |
+| `--finder-reasoning` | `xhigh` | Reasoning effort for the finder. |
+| `--writer-model` | `gpt-5.6-sol` | Model used to write the engineering brief. |
+| `--writer-reasoning` | `high` | Reasoning effort for the writer. |
+| `--max-output-tokens` | `40000` | Output limit per model request, including reasoning and visible JSON. Accepts `1000`–`100000`. |
+| `--output-dir` | `repository_kickoff/outputs` | Directory for run records and artifacts. |
+| `--repository-dir` | `repository_kickoff/selected_repositories` | Directory for consolidated handoffs. |
+| `--reuse-finder-response` | Not set | Path to a saved `repository_finder_response.json` receipt. |
+| `--validate-only` | Off | Check local inputs without API calls. |
+
+These model names are application defaults, not a guarantee of account availability.
+Use `--finder-model` and `--writer-model` to select models available to your account.
+Reasoning choices are `none`, `low`, `medium`, `high`, `xhigh`, and `max`; the selected
+model must support the requested setting.
+
+For example, configure the two stages explicitly:
+
+```powershell
+.\.venv\Scripts\python.exe .\repository_kickoff\repository_kickoff.py `
+  --finder-model gpt-5.6-sol --finder-reasoning xhigh `
+  --writer-model gpt-5.6-sol --writer-reasoning high
+```
+
+Run with `--help` to see all options. If you choose custom output directories inside
+the checkout, add them to `.gitignore` before committing generated data.
+
+### Reuse a saved finder response
+
+If a run saved a finder receipt before failing at a later stage, you can start a new
+run with that receipt. Replace the example path with your saved file:
+
+```powershell
+.\.venv\Scripts\python.exe .\repository_kickoff\repository_kickoff.py `
+  --reuse-finder-response "path\to\repository_finder_response.json"
+```
+
+This skips candidate discovery and the finder model call. The application still
+validates the saved selection, checks current GitHub metadata, downloads and scans
+the selected source, and invokes the writer if those stages succeed. Previously
+recorded repositories remain ineligible.
+
+## Outputs
+
+Run artifacts are stored in `repository_kickoff/outputs/<run-id>/` by default.
+
+| File or location | What to use it for |
+| --- | --- |
+| `selected_repositories/<owner>/<repository>/repository_kickoff.md` | Consolidated handoff under `repository_kickoff/`: repository identity, risk report, and copy-ready task. |
+| `outputs/<run-id>/repository_kickoff.md` | Run summary with repository metadata, engineering task, source evidence, and screening limitations. |
+| `content_safety_findings.md` | Linked findings grouped by file, plus preparation or review status. |
+| `status.json` | Current stage and completion, failure, or interruption status. |
+| `usage.json` and response receipts | Per-stage token usage, response IDs, source URLs, and structured output. |
+| `upload_ready_repository.zip` | Prepared source archive, created only after clean scans. |
+
+The first two paths are relative to `repository_kickoff/`; other filenames are
+relative to the run directory.
+
+<details>
+<summary>Full artifact reference for a standard successful run</summary>
 
 ```text
 repository_kickoff/outputs/<run-id>/
@@ -158,10 +173,10 @@ repository_kickoff/outputs/<run-id>/
   initial_content_safety_scan.json
   content_safety_findings.md
   content_safety_report.json
-  sanitization_manifest.json        # clean scans only
-  prepared_repository_identity.json # clean scans only
-  prepared_repository/              # clean scans only
-  upload_ready_repository.zip       # clean scans only
+  sanitization_manifest.json         # when preparation is attempted
+  prepared_repository_identity.json  # clean preparation only
+  prepared_repository/               # clean preparation only
+  upload_ready_repository.zip        # clean preparation only
   writer_input.json
   turn_one_writer_response.json
   writer_result.json
@@ -171,65 +186,126 @@ repository_kickoff/outputs/<run-id>/
   status.json
 ```
 
-The two response receipts are written immediately after their paid API calls and
-contain response IDs, usage, included web-source URLs, and structured output
-text. They remain available if a later validation stage fails. The Markdown file
-is the main result. The single repository registry is
-`repository_kickoff/data/used_repositories.json`, initialized from the empty
-example during setup. Once both model stages and local validation succeed, a new
-recommendation is added as `used_for_task` only if
-the initial selected-tree scan was clean and the prepared copy passed its clean
-rescan. Otherwise it is added as `potential_pii`, with its run ID and relative
-paths to the risk report and consolidated handoff. Both statuses prevent
-duplicate recommendations.
-After reviewing a flagged repository, you can change that one status to
-`used_for_task` in the JSON file; this is bookkeeping, **not** an upload-safety
-certificate. A failed run does not add a registry entry.
+Reused finder responses skip the candidate-preflight artifacts. Failed or interrupted
+runs retain the records written before they stopped. Model receipts are saved before
+response validation, and the findings report is saved as soon as the selected source
+has been scanned, so both can remain available after later failures.
 
-`content_safety_findings.md` is written immediately after the selected snapshot
-is scanned, so it remains available even when later stages fail. It contains a
-pinned GitHub link for every flagged file and flagged line, grouped by file with
-its categories, detectors, and dispositions. It never includes matched values,
-source snippets, or fingerprints. It also records whether an upload-ready copy
-was created or manual review is pending.
+</details>
 
-## Model defaults
+## How it works
 
-Both stages default to `gpt-5.6-sol`. The finder defaults to `xhigh` reasoning
-because it compares candidates, checks source evidence, and judges long-horizon
-fit. The narrower engineering-task writer defaults to `high`. This is a quality-first
-starting point, not a measured claim that `xhigh` always wins; compare results
-on representative runs before raising writer effort. The shared 40,000-token
-output budget includes both reasoning and visible JSON; a smaller budget can
-stop a response mid-object.
-These are the application defaults. Override the model names with models
-available to your API account when needed:
+1. **Discover candidates.** Search GitHub, download pinned archives, check repository
+   structure, and record advisory content findings.
+2. **Compare source evidence.** The finder researches only the preflight allowlist
+   and compares candidates at their recorded commits.
+3. **Verify the selection.** Refresh GitHub identity, stars, license, activity, branch,
+   and commit information; then download and scan the selected snapshot.
+4. **Prepare eligible source.** Copy an initially clean tree to an isolated directory
+   and rescan it before producing an archive. Findings require manual review instead.
+5. **Write and record the task.** The independent writer produces a read-only
+   investigation; the application saves the handoff, run records, and registry entry.
+
+If the default branch advances during research, the finder-evidence commit is retained
+separately. The writer and final task must cite the newly verified download commit.
+The two model stages have no shared chat history. The writer receives a reduced
+engineering dossier; candidate scoring, selection strategy, model settings, run IDs,
+and content-review metadata stay outside that dossier.
+
+The task requests findings from the current investigation. Source-review status stays
+in the risk report, while the brief focuses on engineering behavior, evidence, scope,
+and guardrails. It does not request a later implementation or roadmap.
+
+### Repository-selection criteria
+
+| Criterion | Current policy |
+| --- | --- |
+| Repository | Public, Python-focused, not archived, and not a fork. |
+| Popularity | More than **500 stars**, with no upper limit. |
+| License | One of the permitted SPDX identifiers listed below. |
+| Download size | Strictly below **50 MiB** (52,428,800 bytes), measured from the complete download rather than GitHub size metadata. |
+| Structure | At least 50 files, 8 Python source files, 8 Python test files, and 20 Python files overall; packaging metadata and CI are also required. |
+| Engineering depth | At least three connected workflow boundaries, multiple maintainer concerns, useful tests or fixtures, local feasibility, meaningful failure/recovery behavior, and no unresolved disqualifiers. |
+| Exclusions | Previously recorded repositories and excluded subject areas, including cybersecurity, malware/exploitation, biology/biotech, genomics, and drug discovery. |
+
+Permitted licenses: `MIT`, `MIT-0`, `Apache-2.0`, `BSD-2-Clause`, `BSD-3-Clause`,
+`ISC`, `Zlib`, `0BSD`, `Unlicense`, and `CC0-1.0`.
+
+Archive extraction rejects traversal, links, path collisions, excessive expansion,
+suspicious compression ratios, and excessive file counts. Local content findings
+are advisory during candidate selection and task writing; they control archive
+preparation separately.
+
+### Content review and archive preparation
+
+| Scan outcome | Result |
+| --- | --- |
+| Initial scan and prepared-copy rescan are clean | Generate the brief, linked report, prepared archive, and `clean_upstream` identity. |
+| Findings require review | Generate the brief and linked report when the remaining stages succeed; do not create an upload-ready archive. |
+| Download, extraction, or scan execution fails | Stop before the writer call and retain available diagnostic records. |
+
+Keys, tokens, sensitive configuration, proprietary indicators, unreadable files,
+raster images/screenshots, binaries, and ambiguous exports are blocked from automatic
+preparation or require review. Plain UTF-8 SVG XML is text-scanned; SVG files containing
+embedded raster data require review. The kickoff command does not automatically
+rewrite flagged files.
+
+JSON scan reports record categories, locations, detector names, counts, and one-way
+fingerprints, without matched secret or personal values. The Markdown findings report
+provides pinned file/line links without matched values, source snippets, or fingerprints.
+
+The source tree and original archive are never modified. Temporary downloads are
+removed when inspection/preparation ends. Screening is heuristic: a clean scan is
+not proof that sensitive content is absent. Review findings before using or uploading
+flagged source; manual remediation still requires a clean scan and rescan before
+upload preparation.
+
+### Local repository registry
+
+`repository_kickoff/data/used_repositories.json` starts empty and stays local. A
+completed run adds one of these statuses:
+
+| Status | Meaning |
+| --- | --- |
+| `used_for_task` | The initial scan was clean and the prepared copy passed its rescan. |
+| `potential_pii` | Findings require manual review; the entry links the run's report and handoff. |
+
+Both statuses prevent repeat recommendations. Failed runs do not add an entry.
+After reviewing a flagged repository, you may update its status to `used_for_task`
+for bookkeeping. Changing a registry status does not certify source safety or create
+an upload-ready archive.
+
+## Troubleshooting
+
+| Problem | Next step |
+| --- | --- |
+| Missing registry or configuration | Complete quick-start step 2. Preserve existing files when updating. |
+| API key or model error | Check `.env` and process environment values; select models and reasoning settings available to your API account. |
+| GitHub rate-limit or network failure | Configure the optional `GITHUB_TOKEN`, check connectivity and Git availability, and inspect `status.json`. |
+| Incomplete model response | Inspect the saved receipt. Increase `--max-output-tokens` within the supported range or lower the affected stage's reasoning effort. Reasoning uses part of the output budget. |
+| Later-stage failure after the finder finished | Inspect the stage records and consider `--reuse-finder-response` to avoid repeating the finder call. |
+| Existing handoff has different content | Preserve it and choose another `--repository-dir`; the tool refuses to overwrite it. |
+
+## Development
+
+Run the existing regression suite from the repository root:
 
 ```powershell
-.\.venv\Scripts\python.exe .\repository_kickoff\repository_kickoff.py `
-  --finder-model gpt-5.6-sol --finder-reasoning xhigh `
-  --writer-model gpt-5.6-sol --writer-reasoning high
+.\.venv\Scripts\python.exe -m unittest discover -s repository_kickoff -t . -p "test_*.py"
 ```
 
-The tool performs exactly two OpenAI requests on a successful run. Both use web
-search and strict structured output. The local output includes per-stage token
-usage and web-source receipts so cost and discovery provenance can be reviewed
-after every call, including runs that fail later validation. No writer request
-is made when archive download, extraction, or scan execution fails. Scanner
-findings alone do not prevent the writer request.
-An incomplete response is saved with its status, reason, output limit, and token
-usage. When the output limit is exhausted, the error recommends increasing
-`--max-output-tokens` or lowering the affected stage's reasoning effort.
+Tests use temporary directories and mocked external calls, without paid API requests.
+Symlink coverage may be skipped when the host does not permit creating symlinks.
 
-## Repository contents
+| Component | Responsibility |
+| --- | --- |
+| [repository_kickoff.py](repository_kickoff/repository_kickoff.py) | CLI, GitHub checks, model stages, registry, and handoffs. |
+| [archive_preparation.py](repository_kickoff/archive_preparation.py) | Bounded downloads and safe ZIP extraction. |
+| [content_safety.py](repository_kickoff/content_safety.py) | Local heuristic content scanning. |
+| [sanitization.py](repository_kickoff/sanitization.py) | Isolated preparation, rescan, and archive generation. |
+| [prompts/](repository_kickoff/prompts/) | Finder and task-writer instructions. |
+| [test_*.py](repository_kickoff/test_repository_kickoff.py) | Regression tests alongside the application modules. |
+| [chat_fallback.md](repository_kickoff/chat_fallback.md) | Optional manual workflow for a web-enabled chat. |
 
-- `repository_kickoff/repository_kickoff.py`: CLI, GitHub preflight, stage orchestration, and handoffs.
-- `repository_kickoff/archive_preparation.py`: bounded download and safe ZIP extraction.
-- `repository_kickoff/content_safety.py`: local heuristic content screening.
-- `repository_kickoff/sanitization.py`: isolated preparation and archive generation.
-- `repository_kickoff/prompts/`: finder and task-writer instructions.
-- `repository_kickoff/test_*.py`: local regression coverage.
-- `repository_kickoff/chat_fallback.md`: optional manual chat workflow.
-
-Credentials, selection history, generated handoffs, run outputs, downloaded
-repositories, virtual environments, and archived legacy material stay local.
+Credentials, selection history, generated handoffs, run outputs, virtual environments,
+and archived legacy material are excluded from version control by default.
